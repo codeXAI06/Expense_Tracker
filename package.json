@@ -13,5 +13,9 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@types/multer": "^2.2.0",
+    "multer": "^2.2.0"
   }
 }
