@@ -103,4 +103,5 @@ describe('Receipt intelligence API', () => {
 
     expect(response.body.message).toMatch(/extract|manually|receipt/i);
   });
+
 });

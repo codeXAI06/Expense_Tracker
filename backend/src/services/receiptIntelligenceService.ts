@@ -1,6 +1,7 @@
 import { AppError } from '../utils/appError.js';
 import ReceiptConfirmation from '../models/ReceiptConfirmation.js';
 import Transaction from '../models/Transaction.js';
+import { recognize } from 'tesseract.js';
 
 export interface ReceiptExtraction {
   merchant: string;
@@ -10,6 +11,15 @@ export interface ReceiptExtraction {
   subcategory: string;
   confidence: number;
   source: 'ocr' | 'rule' | 'manual';
+}
+
+function isBinaryImage(buffer: Buffer) {
+  return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
+    buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) ||
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' ||
+    buffer.subarray(4, 8).toString('ascii') === 'WEBP' ||
+    buffer.subarray(0, 6).toString('ascii') === 'GIF87a' ||
+    buffer.subarray(0, 6).toString('ascii') === 'GIF89a';
 }
 
 function extractFromText(content: string): ReceiptExtraction {
@@ -65,7 +75,17 @@ export async function analyzeReceiptForUser(_userId: string, fileBuffer: Buffer,
     throw new AppError('Unsupported file type. Please upload a receipt image (PNG, JPG, JPEG, WEBP, or GIF).', 400);
   }
 
-  const content = fileBuffer.toString('utf-8');
+  let content: string;
+  if (isBinaryImage(fileBuffer)) {
+    try {
+      const ocrResult = await recognize(fileBuffer, 'eng');
+      content = ocrResult.data.text;
+    } catch {
+      throw new AppError('Receipt details could not be extracted. Please review the receipt manually.', 422);
+    }
+  } else {
+    content = fileBuffer.toString('utf-8');
+  }
   const extraction = extractFromText(content);
 
   if (extraction.merchant === 'Unknown Merchant' || extraction.amount <= 0) {
