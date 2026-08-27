@@ -21,6 +21,16 @@ describe('App routing shell', () => {
     expect(screen.getByRole('link', { name: /create account/i })).toBeInTheDocument();
   });
 
+  it('redirects unauthenticated dashboard visits to login', () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { name: /your financial picture awaits/i })).toBeInTheDocument();
+  });
+
   it('logs in through the API and persists the returned token', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
