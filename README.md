@@ -82,6 +82,20 @@ The app is designed for a split deployment model:
 - Backend: Render or Railway
 - Database: MongoDB Atlas
 
+### Docker Compose
+
+Set a strong `JWT_SECRET`, then run:
+
+```bash
+docker compose up --build
+```
+
+The frontend is available at `http://localhost:8080` and the API at `http://localhost:5000`. The compose database uses a named volume and is intended for local verification; hosted deployments should use MongoDB Atlas and configure `CLIENT_URL` and `VITE_API_URL` for the deployed origins.
+
+### CI
+
+GitHub Actions runs `npm ci`, the complete test suite, and both production builds on pushes and pull requests targeting `develop` or `master`.
+
 ## Security notes
 
 - No secrets are committed to source control
