@@ -26,6 +26,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
 }
 
 const blankTransaction = {
+  type: "expense" as "income" | "expense" | "transfer",
   amount: "",
   merchant: "",
   description: "",
@@ -36,6 +37,7 @@ const blankTransaction = {
 
 type Transaction = {
   id: string;
+  type: "income" | "expense" | "transfer";
   merchant?: string;
   description: string;
   category: string;
@@ -57,7 +59,7 @@ export function TransactionManager() {
   async function load() {
     try {
       const data = await requestJson<{ items: Transaction[] }>(
-        `/api/transactions?type=expense&search=${encodeURIComponent(search)}&limit=50&page=1`,
+        `/api/transactions?search=${encodeURIComponent(search)}&limit=50&page=1`,
       );
       setItems(data.items);
       setError("");
@@ -81,6 +83,7 @@ export function TransactionManager() {
   function edit(item: Transaction) {
     setEditingId(item.id);
     setForm({
+      type: item.type,
       amount: String(item.amount),
       merchant: item.merchant ?? "",
       description: item.description,
@@ -106,7 +109,6 @@ export function TransactionManager() {
     try {
       const body = {
         ...form,
-        type: "expense",
         amount: Number(form.amount),
         date: `${form.date}T00:00:00.000Z`,
       };
@@ -161,6 +163,16 @@ export function TransactionManager() {
         onSubmit={submit}
         className="mt-8 grid gap-3 rounded-xl border border-white/10 bg-panel p-5 sm:grid-cols-2 lg:grid-cols-4"
       >
+        <select
+          aria-label="Transaction type"
+          value={form.type}
+          onChange={(event) => updateForm("type", event.target.value)}
+          className="field"
+        >
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
+        </select>
         <Input
           required
           aria-label="Amount"
@@ -209,7 +221,11 @@ export function TransactionManager() {
           disabled={busy}
           className="rounded-lg bg-mint px-4 py-3 font-bold text-ink"
         >
-          {busy ? "Saving..." : editingId ? "Update expense" : "Add expense"}
+          {busy
+            ? "Saving..."
+            : editingId
+              ? "Update transaction"
+              : `Add ${form.type}`}
         </button>
         {editingId && (
           <button
@@ -248,13 +264,12 @@ export function TransactionManager() {
                   {item.merchant || item.description}
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  {item.category} / {new Date(item.date).toLocaleDateString()}
+                  {item.type} / {item.category} /{" "}
+                  {new Date(item.date).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex items-center gap-4">
-                <strong>
-                  {formatRupees.format(item.amount)}
-                </strong>
+                <strong>{formatRupees.format(item.amount)}</strong>
                 <button
                   onClick={() => edit(item)}
                   className="text-sm text-mint"
@@ -483,7 +498,8 @@ export function GoalManager() {
                 />
               </div>
               <p className="mt-3 text-sm text-muted">
-                {formatRupees.format(goal.currentAmount)} of {formatRupees.format(goal.targetAmount)}
+                {formatRupees.format(goal.currentAmount)} of{" "}
+                {formatRupees.format(goal.targetAmount)}
               </p>
               <div className="mt-5 flex gap-4 text-sm">
                 <button onClick={() => edit(goal)} className="text-mint">
