@@ -1,4 +1,5 @@
 import Transaction from '../models/Transaction.js';
+import { formatRupees } from '../utils/currency.js';
 
 export async function buildMonthlyReportForUser(userId: string, month: string) {
   const [year, monthIndex] = month.split('-').map(Number);
@@ -14,8 +15,8 @@ export async function buildMonthlyReportForUser(userId: string, month: string) {
   }
 
   const insights = [
-    `Your income for this month totaled ${totalIncome.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`,
-    `Your total expenses were ${totalExpenses.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`,
+    `Your income for this month totaled ${formatRupees(totalIncome)}.`,
+    `Your total expenses were ${formatRupees(totalExpenses)}.`,
     `Largest category: ${Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'No category data'}.`
   ];
 

@@ -1,4 +1,5 @@
 import Transaction from '../models/Transaction.js';
+import { formatRupees } from '../utils/currency.js';
 import { AppError } from '../utils/appError.js';
 
 export interface SpendingSummaryResult {
@@ -80,8 +81,8 @@ export async function getSpendingInsightsForUser(userId: string, month: string) 
   const biggestExpense = (await Transaction.find({ user: userId, type: 'expense', date: { $gte: new Date(`${month}-01T00:00:00.000Z`), $lt: new Date(`${month}-31T23:59:59.999Z`) } }).sort({ amount: -1 }).limit(1).lean())[0];
 
   const insights = [
-    `Your largest spending category is ${topCategory} at ${topCategoryValue.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`,
-    `Your average daily spend is ${summary.averageDailySpend.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`,
+    `Your largest spending category is ${topCategory} at ${formatRupees(topCategoryValue)}.`,
+    `Your average daily spend is ${formatRupees(summary.averageDailySpend)}.`,
     summary.trend.delta >= 0
       ? `Spending is ${summary.trend.deltaPercent.toFixed(1)}% higher than last month.`
       : `Spending is ${Math.abs(summary.trend.deltaPercent).toFixed(1)}% lower than last month.`
@@ -99,7 +100,7 @@ export async function getSpendingInsightsForUser(userId: string, month: string) 
         }
       : null,
     insights,
-    summary: `You spent ${summary.totalExpenses.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} this month, with ${topCategory} as the largest category.`,
+    summary: `You spent ${formatRupees(summary.totalExpenses)} this month, with ${topCategory} as the largest category.`,
     totalExpenses: summary.totalExpenses,
     averageDailySpend: summary.averageDailySpend,
     byCategory: summary.byCategory

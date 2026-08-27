@@ -1,32 +1,817 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { ArrowUpRight, BarChart3, Bot, LogIn, Plus, ShieldAlert, Target, Wallet } from 'lucide-react';
-import { GoalManager, TransactionManager } from './ManagementWorkspaces';
-import { CategorizationWorkspace, InvestigationWorkspace, ReportWorkspace, ScenarioWorkspace } from './IntelligenceWorkspaces';
-import { AssistantWorkspace, ImportWorkspace, ReceiptWorkspace } from './CaptureWorkspaces';
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import {
+  ArrowUpRight,
+  BarChart3,
+  Bot,
+  LogIn,
+  Plus,
+  ShieldAlert,
+  Target,
+  Wallet,
+} from "lucide-react";
+import { GoalManager, TransactionManager } from "./ManagementWorkspaces";
+import {
+  CategorizationWorkspace,
+  InvestigationWorkspace,
+  ReportWorkspace,
+  ScenarioWorkspace,
+} from "./IntelligenceWorkspaces";
+import {
+  AssistantWorkspace,
+  ImportWorkspace,
+  ReceiptWorkspace,
+} from "./CaptureWorkspaces";
+import { formatRupees } from "./currency";
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
-const TOKEN = 'expense_tracker_token';
-const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const API = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+const TOKEN = "expense_tracker_token";
+const money = formatRupees;
 
 type User = { id: string; name: string; email: string };
-type Summary = { totalIncome: number; totalExpenses: number; net: number; byCategory: Record<string, number> };
-type Goal = { name: string; currentAmount: number; targetAmount: number; progressPercent: number; dueDate: string };
-const empty: Summary = { totalIncome: 0, totalExpenses: 0, net: 0, byCategory: {} };
+type Summary = {
+  totalIncome: number;
+  totalExpenses: number;
+  net: number;
+  byCategory: Record<string, number>;
+};
+type Goal = {
+  name: string;
+  currentAmount: number;
+  targetAmount: number;
+  progressPercent: number;
+  dueDate: string;
+};
+const empty: Summary = {
+  totalIncome: 0,
+  totalExpenses: 0,
+  net: 0,
+  byCategory: {},
+};
 
-function Field(props: React.InputHTMLAttributes<HTMLInputElement>) { return <input {...props} className={`field ${props.className ?? ''}`} />; }
-function Panel({ title, children }: { title: string; children: ReactNode }) { return <section className="rounded-xl border border-white/10 bg-panel p-6 lg:p-8"><h2 className="font-display text-2xl">{title}</h2><div className="mt-6">{children}</div></section>; }
-function Landing() { return <div className="landing-shell min-h-screen bg-ink text-paper"><nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-6"><div><p className="text-xs font-bold uppercase tracking-[0.3em] text-mint">Finance OS</p><p className="font-display text-xl">Northstar</p></div><div className="flex items-center gap-4 text-sm"><Link to="/login" className="text-muted">Log in</Link><Link to="/signup" className="rounded-lg bg-coral px-4 py-2 font-bold text-ink">Create account</Link></div></nav><main className="relative z-10 mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-12 lg:grid-cols-2 lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.2em] text-mint">Capture · understand · act</p><h1 className="mt-5 font-display text-5xl leading-none sm:text-7xl">Your money, finally in focus<span className="text-coral">.</span></h1><p className="mt-7 max-w-xl text-lg leading-8 text-muted">Track real transactions, find unusual spending, forecast cash flow, and make confident decisions with explainable financial intelligence.</p><Link to="/signup" className="mt-9 inline-flex items-center gap-2 rounded-lg bg-coral px-5 py-3 font-bold text-ink">Build your financial picture <ArrowUpRight size={18} /></Link></div><div className="landing-card rounded-xl border border-white/10 bg-panel p-6 lg:p-8"><p className="text-sm text-muted">A clearer financial month</p><p className="mt-2 font-display text-5xl">$3,146</p><div className="mt-10 space-y-5">{['Income', 'Essentials', 'Flexible spend', 'Savings'].map((name, index) => <div key={name}><div className="mb-2 flex justify-between text-sm"><span>{name}</span><span className="text-muted">{['$8,420', '$2,500', '$2,774', '$3,146'][index]}</span></div><div className="h-2 rounded-full bg-white/10"><div className={['bg-mint', 'bg-coral', 'bg-gold', 'bg-lilac'][index] + ' h-full rounded-full'} style={{ width: `${[100, 42, 55, 68][index]}%` }} /></div></div>)}</div><p className="mt-8 border-t border-white/10 pt-5 text-sm leading-6 text-muted">Deterministic analytics first. AI only explains what the data supports.</p></div></main></div>; }
+function Field(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} className={`field ${props.className ?? ""}`} />;
+}
+function Panel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-white/10 bg-panel p-6 lg:p-8">
+      <h2 className="font-display text-2xl">{title}</h2>
+      <div className="mt-6">{children}</div>
+    </section>
+  );
+}
+function Landing() {
+  return (
+    <div className="landing-shell min-h-screen bg-ink text-paper">
+      <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-6">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-mint">
+            Finance OS
+          </p>
+          <p className="font-display text-xl">Northstar</p>
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          <Link to="/login" className="text-muted">
+            Log in
+          </Link>
+          <Link
+            to="/signup"
+            className="rounded-lg bg-coral px-4 py-2 font-bold text-ink"
+          >
+            Create account
+          </Link>
+        </div>
+      </nav>
+      <main className="relative z-10 mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-12 lg:grid-cols-2 lg:items-center">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-mint">
+            Capture · understand · act
+          </p>
+          <h1 className="mt-5 font-display text-5xl leading-none sm:text-7xl">
+            Your money, finally in focus<span className="text-coral">.</span>
+          </h1>
+          <p className="mt-7 max-w-xl text-lg leading-8 text-muted">
+            Track real transactions, find unusual spending, forecast cash flow,
+            and make confident decisions with explainable financial
+            intelligence.
+          </p>
+          <Link
+            to="/signup"
+            className="mt-9 inline-flex items-center gap-2 rounded-lg bg-coral px-5 py-3 font-bold text-ink"
+          >
+            Build your financial picture <ArrowUpRight size={18} />
+          </Link>
+        </div>
+        <div className="landing-card rounded-xl border border-white/10 bg-panel p-6 lg:p-8">
+          <p className="text-sm text-muted">A clearer financial month</p>
+          <p className="mt-2 font-display text-5xl">₹3,146</p>
+          <div className="mt-10 space-y-5">
+            {["Income", "Essentials", "Flexible spend", "Savings"].map(
+              (name, index) => (
+                <div key={name}>
+                  <div className="mb-2 flex justify-between text-sm">
+                    <span>{name}</span>
+                      <span className="text-muted">
+                        {["₹8,420", "₹2,500", "₹2,774", "₹3,146"][index]}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/10">
+                    <div
+                      className={
+                        ["bg-mint", "bg-coral", "bg-gold", "bg-lilac"][index] +
+                        " h-full rounded-full"
+                      }
+                      style={{ width: `${[100, 42, 55, 68][index]}%` }}
+                    />
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+          <p className="mt-8 border-t border-white/10 pt-5 text-sm leading-6 text-muted">
+            Deterministic analytics first. AI only explains what the data
+            supports.
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
 
-function Auth({ mode }: { mode: 'login' | 'signup' }) { const navigate = useNavigate(); const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(''); try { const response = await fetch(`${API}/api/auth/${mode}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'signup' ? { name, email, password } : { email, password }) }); const data = await response.json() as { token?: string; user?: User; message?: string }; if (!response.ok || !data.token || !data.user) throw new Error(data.message ?? 'Authentication failed.'); localStorage.setItem(TOKEN, data.token); localStorage.setItem('expense_tracker_user', JSON.stringify(data.user)); navigate('/dashboard'); } catch (authError) { setError(authError instanceof Error ? authError.message : 'Authentication failed.'); } finally { setBusy(false); } } return <div className="min-h-screen bg-ink px-5 py-16 text-paper"><div className="mx-auto max-w-md"><Link to="/" className="text-sm text-mint">← Northstar</Link><div className="mt-10 rounded-xl border border-white/10 bg-panel p-8"><p className="text-sm font-bold uppercase tracking-[0.25em] text-mint">{mode === 'login' ? 'Welcome back' : 'Start here'}</p><h1 className="mt-3 font-display text-4xl">{mode === 'login' ? 'Your financial picture awaits.' : 'Make money less mysterious.'}</h1><form onSubmit={submit} className="mt-8 space-y-4">{mode === 'signup' && <Field required minLength={2} aria-label="Name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" />}<Field required type="email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" /><Field required minLength={8} type="password" aria-label="Password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />{error && <p role="alert" className="text-sm text-coral">{error}</p>}<button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-lg bg-coral py-3 font-bold text-ink">{busy ? 'Working…' : mode === 'login' ? 'Log in' : 'Create account'}</button></form><p className="mt-6 text-sm text-muted">{mode === 'login' ? 'New to Northstar?' : 'Already have an account?'} <Link to={mode === 'login' ? '/signup' : '/login'} className="text-mint">{mode === 'login' ? 'Create an account' : 'Log in'}</Link></p></div></div></div>; }
+function Auth({ mode }: { mode: "login" | "signup" }) {
+  const navigate = useNavigate();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API}/api/auth/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          mode === "signup" ? { name, email, password } : { email, password },
+        ),
+      });
+      const data = (await response.json()) as {
+        token?: string;
+        user?: User;
+        message?: string;
+      };
+      if (!response.ok || !data.token || !data.user)
+        throw new Error(data.message ?? "Authentication failed.");
+      localStorage.setItem(TOKEN, data.token);
+      localStorage.setItem("expense_tracker_user", JSON.stringify(data.user));
+      navigate("/dashboard");
+    } catch (authError) {
+      setError(
+        authError instanceof Error
+          ? authError.message
+          : "Authentication failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="min-h-screen bg-ink px-5 py-16 text-paper">
+      <div className="mx-auto max-w-md">
+        <Link to="/" className="text-sm text-mint">
+          ← Northstar
+        </Link>
+        <div className="mt-10 rounded-xl border border-white/10 bg-panel p-8">
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-mint">
+            {mode === "login" ? "Welcome back" : "Start here"}
+          </p>
+          <h1 className="mt-3 font-display text-4xl">
+            {mode === "login"
+              ? "Your financial picture awaits."
+              : "Make money less mysterious."}
+          </h1>
+          <form onSubmit={submit} className="mt-8 space-y-4">
+            {mode === "signup" && (
+              <Field
+                required
+                minLength={2}
+                aria-label="Name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+              />
+            )}
+            <Field
+              required
+              type="email"
+              aria-label="Email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Email address"
+            />
+            <Field
+              required
+              minLength={8}
+              type="password"
+              aria-label="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password"
+            />
+            {error && (
+              <p role="alert" className="text-sm text-coral">
+                {error}
+              </p>
+            )}
+            <button
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-coral py-3 font-bold text-ink"
+            >
+              {busy
+                ? "Working…"
+                : mode === "login"
+                  ? "Log in"
+                  : "Create account"}
+            </button>
+          </form>
+          <p className="mt-6 text-sm text-muted">
+            {mode === "login"
+              ? "New to Northstar?"
+              : "Already have an account?"}{" "}
+            <Link
+              to={mode === "login" ? "/signup" : "/login"}
+              className="text-mint"
+            >
+              {mode === "login" ? "Create an account" : "Log in"}
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-function RequireAuth({ children }: { children: ReactNode }) { return localStorage.getItem(TOKEN) ? <>{children}</> : <Navigate to="/login" replace />; }
-function Shell({ children }: { children: ReactNode }) { const navigate = useNavigate(); const user = JSON.parse(localStorage.getItem('expense_tracker_user') ?? 'null') as User | null; return <div className="flex min-h-screen bg-ink text-paper"><aside className="hidden w-64 shrink-0 border-r border-white/10 bg-ink p-6 lg:block"><p className="text-xs font-bold uppercase tracking-[0.3em] text-mint">Finance OS</p><p className="mt-1 font-display text-xl">Northstar</p><nav className="mt-12 space-y-2">{[['/dashboard', 'Overview', BarChart3], ['/dashboard/transactions', 'Transactions', Wallet], ['/dashboard/goals', 'Goals', Target], ['/dashboard/import', 'Import CSV', Plus], ['/dashboard/receipts', 'Receipts', Plus], ['/dashboard/scenarios', 'Scenarios', ArrowUpRight], ['/dashboard/investigate', 'Investigate', ShieldAlert], ['/dashboard/reports', 'Reports', BarChart3], ['/dashboard/categorize', 'AI categorize', Bot], ['/dashboard/assistant', 'Assistant', Bot]].map(([path, label, Icon]) => <Link key={path as string} to={path as string} className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-muted hover:bg-white/5 hover:text-paper"><Icon size={17} />{label as string}</Link>)}</nav><button onClick={() => { localStorage.clear(); navigate('/'); }} className="mt-12 px-3 text-sm text-muted">Log out</button></aside><main className="min-w-0 flex-1"><header className="border-b border-white/10 px-5 py-4 text-right text-sm text-muted lg:px-10">{user?.name ?? 'Account'}</header>{children}</main></div>; }
+function RequireAuth({ children }: { children: ReactNode }) {
+  return localStorage.getItem(TOKEN) ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/login" replace />
+  );
+}
+function Shell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const user = JSON.parse(
+    localStorage.getItem("expense_tracker_user") ?? "null",
+  ) as User | null;
+  return (
+    <div className="flex min-h-screen bg-ink text-paper">
+      <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-ink p-6 lg:block">
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-mint">
+          Finance OS
+        </p>
+        <p className="mt-1 font-display text-xl">Northstar</p>
+        <nav className="mt-12 space-y-2">
+          {[
+            ["/dashboard", "Overview", BarChart3],
+            ["/dashboard/transactions", "Transactions", Wallet],
+            ["/dashboard/goals", "Goals", Target],
+            ["/dashboard/import", "Import CSV", Plus],
+            ["/dashboard/receipts", "Receipts", Plus],
+            ["/dashboard/scenarios", "Scenarios", ArrowUpRight],
+            ["/dashboard/investigate", "Investigate", ShieldAlert],
+            ["/dashboard/reports", "Reports", BarChart3],
+            ["/dashboard/categorize", "AI categorize", Bot],
+            ["/dashboard/assistant", "Assistant", Bot],
+          ].map(([path, label, Icon]) => (
+            <Link
+              key={path as string}
+              to={path as string}
+              className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-muted hover:bg-white/5 hover:text-paper"
+            >
+              <Icon size={17} />
+              {label as string}
+            </Link>
+          ))}
+        </nav>
+        <button
+          onClick={() => {
+            localStorage.clear();
+            navigate("/");
+          }}
+          className="mt-12 px-3 text-sm text-muted"
+        >
+          Log out
+        </button>
+      </aside>
+      <main className="min-w-0 flex-1">
+        <header className="border-b border-white/10 px-5 py-4 text-right text-sm text-muted lg:px-10">
+          {user?.name ?? "Account"}
+        </header>
+        {children}
+      </main>
+    </div>
+  );
+}
 
-function Dashboard() { const [summary, setSummary] = useState<Summary>(empty); useEffect(() => { const token = localStorage.getItem(TOKEN); if (!token) return; fetch(`${API}/api/analytics/spending/summary?month=2026-08`, { headers: { Authorization: `Bearer ${token}` } }).then((response) => response.json()).then((data: Summary) => setSummary({ ...empty, ...data, byCategory: data.byCategory ?? {} })).catch(() => undefined); }, []); return <Shell><div className="mx-auto max-w-[1400px] px-5 py-8 lg:px-10"><p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Overview / August 2026</p><h1 className="mt-3 font-display text-4xl lg:text-6xl">Your financial picture<span className="text-coral">.</span></h1><p className="mt-4 text-muted">A live view of the transactions you provide.</p><section className="mt-8 grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 md:grid-cols-3"><Metric label="Income" value={money.format(summary.totalIncome)} tone="text-mint" /><Metric label="Expenses" value={money.format(summary.totalExpenses)} tone="text-coral" /><Metric label="Available" value={money.format(summary.net)} tone="text-gold" /></section><div className="mt-8 grid gap-8 lg:grid-cols-2"><Panel title="Spending by category">{Object.entries(summary.byCategory).length ? Object.entries(summary.byCategory).map(([name, amount]) => <div key={name} className="flex justify-between border-b border-white/5 py-3 text-sm"><span>{name}</span><strong>{money.format(amount)}</strong></div>) : <p className="text-sm text-muted">Add transactions to see category intelligence.</p>}</Panel><Panel title="Financial intelligence"><p className="text-sm leading-6 text-muted">Your analytics, forecast, anomalies, goals, scenarios, and assistant responses are calculated from your MongoDB transaction history.</p></Panel></div></div></Shell>; }
-function Metric({ label, value, tone }: { label: string; value: string; tone: string }) { return <div className="bg-panel p-6"><p className="text-sm text-muted">{label}</p><p className="mt-4 font-display text-4xl">{value}</p><p className={`mt-2 text-sm ${tone}`}>Live backend data</p></div>; }
+function Dashboard() {
+  const [summary, setSummary] = useState<Summary>(empty);
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN);
+    if (!token) return;
+    fetch(`${API}/api/analytics/spending/summary?month=2026-08`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((response) => response.json())
+      .then((data: Summary) =>
+        setSummary({ ...empty, ...data, byCategory: data.byCategory ?? {} }),
+      )
+      .catch(() => undefined);
+  }, []);
+  return (
+    <Shell>
+      <div className="mx-auto max-w-[1400px] px-5 py-8 lg:px-10">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
+          Overview / August 2026
+        </p>
+        <h1 className="mt-3 font-display text-4xl lg:text-6xl">
+          Your financial picture<span className="text-coral">.</span>
+        </h1>
+        <p className="mt-4 text-muted">
+          A live view of the transactions you provide.
+        </p>
+        <section className="mt-8 grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 md:grid-cols-3">
+          <Metric
+            label="Income"
+            value={money.format(summary.totalIncome)}
+            tone="text-mint"
+          />
+          <Metric
+            label="Expenses"
+            value={money.format(summary.totalExpenses)}
+            tone="text-coral"
+          />
+          <Metric
+            label="Available"
+            value={money.format(summary.net)}
+            tone="text-gold"
+          />
+        </section>
+        <div className="mt-8 grid gap-8 lg:grid-cols-2">
+          <Panel title="Spending by category">
+            {Object.entries(summary.byCategory).length ? (
+              Object.entries(summary.byCategory).map(([name, amount]) => (
+                <div
+                  key={name}
+                  className="flex justify-between border-b border-white/5 py-3 text-sm"
+                >
+                  <span>{name}</span>
+                  <strong>{money.format(amount)}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted">
+                Add transactions to see category intelligence.
+              </p>
+            )}
+          </Panel>
+          <Panel title="Financial intelligence">
+            <p className="text-sm leading-6 text-muted">
+              Your analytics, forecast, anomalies, goals, scenarios, and
+              assistant responses are calculated from your MongoDB transaction
+              history.
+            </p>
+          </Panel>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className="bg-panel p-6">
+      <p className="text-sm text-muted">{label}</p>
+      <p className="mt-4 font-display text-4xl">{value}</p>
+      <p className={`mt-2 text-sm ${tone}`}>Live backend data</p>
+    </div>
+  );
+}
 
-function TransactionsWorkspace() { const [items, setItems] = useState<Array<{ id: string; merchant?: string; description: string; category: string; amount: number; date: string }>>([]); const [search, setSearch] = useState(''); const [error, setError] = useState(''); const [form, setForm] = useState({ amount: '', merchant: '', description: '', category: '', paymentMethod: 'Card', date: new Date().toISOString().slice(0, 10) }); async function load() { try { const response = await fetch(`${API}/api/transactions?type=expense&search=${encodeURIComponent(search)}&limit=50&page=1`, { headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN)}` } }); const data = await response.json() as { items?: typeof items; message?: string }; if (!response.ok) throw new Error(data.message ?? 'Transactions unavailable.'); setItems(data.items ?? []); } catch (loadError) { setError(loadError instanceof Error ? loadError.message : 'Transactions unavailable.'); } } useEffect(() => { void load(); }, []); async function add(event: FormEvent) { event.preventDefault(); const response = await fetch(`${API}/api/transactions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem(TOKEN)}` }, body: JSON.stringify({ ...form, type: 'expense', amount: Number(form.amount), date: `${form.date}T00:00:00.000Z` }) }); if (!response.ok) { const data = await response.json() as { message?: string }; setError(data.message ?? 'Could not save transaction.'); return; } setForm({ amount: '', merchant: '', description: '', category: '', paymentMethod: 'Card', date: new Date().toISOString().slice(0, 10) }); await load(); } return <Shell><div className="mx-auto max-w-[1200px] px-5 py-10 lg:px-10"><p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Workspace / Transactions</p><h1 className="mt-3 font-display text-5xl">Your money trail<span className="text-coral">.</span></h1><form onSubmit={add} className="mt-8 grid gap-3 rounded-xl border border-white/10 bg-panel p-5 sm:grid-cols-2 lg:grid-cols-3"><Field required aria-label="Amount" type="number" min="0.01" step="0.01" placeholder="Amount" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /><Field required aria-label="Merchant" placeholder="Merchant" value={form.merchant} onChange={(event) => setForm({ ...form, merchant: event.target.value })} /><Field required aria-label="Description" placeholder="Description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /><Field required aria-label="Category" placeholder="Category" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} /><Field required aria-label="Date" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /><button className="rounded-lg bg-mint px-4 py-3 font-bold text-ink">Add expense</button></form><div className="mt-6 flex gap-3"><Field aria-label="Search" placeholder="Search transactions" value={search} onChange={(event) => setSearch(event.target.value)} /><button onClick={() => void load()} className="rounded-lg border border-white/15 px-4 text-mint">Search</button></div>{error && <p role="alert" className="mt-4 text-sm text-coral">{error}</p>}<div className="mt-6 overflow-x-auto rounded-xl border border-white/10 bg-panel"><table className="w-full min-w-[600px] text-left text-sm"><thead className="border-b border-white/10 text-muted"><tr><th className="p-4">Date</th><th className="p-4">Merchant</th><th className="p-4">Category</th><th className="p-4 text-right">Amount</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b border-white/5"><td className="p-4 text-muted">{new Date(item.date).toLocaleDateString()}</td><td className="p-4">{item.merchant || item.description}</td><td className="p-4 text-muted">{item.category}</td><td className="p-4 text-right text-coral">-{money.format(item.amount)}</td></tr>)}</tbody></table>{items.length === 0 && <p className="p-8 text-center text-sm text-muted">No transactions found.</p>}</div></div></Shell>; }
-function GoalsWorkspace() { const [goals, setGoals] = useState<Goal[]>([]); const [name, setName] = useState(''); const [target, setTarget] = useState(''); const [dueDate, setDueDate] = useState(''); async function load() { const response = await fetch(`${API}/api/goals`, { headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN)}` } }); const data = await response.json() as { goals?: Goal[] }; setGoals(data.goals ?? []); } useEffect(() => { void load(); }, []); async function add(event: FormEvent) { event.preventDefault(); await fetch(`${API}/api/goals`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem(TOKEN)}` }, body: JSON.stringify({ name, type: 'savings', targetAmount: Number(target), currentAmount: 0, category: 'Savings', dueDate }) }); setName(''); setTarget(''); setDueDate(''); await load(); } return <Shell><div className="mx-auto max-w-[1000px] px-5 py-10 lg:px-10"><p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Workspace / Goals</p><h1 className="mt-3 font-display text-5xl">Give your money a destination<span className="text-coral">.</span></h1><form onSubmit={add} className="mt-8 grid gap-3 rounded-xl border border-white/10 bg-panel p-5 sm:grid-cols-3"><Field required aria-label="Goal name" placeholder="Goal name" value={name} onChange={(event) => setName(event.target.value)} /><Field required aria-label="Target amount" type="number" min="0.01" placeholder="Target amount" value={target} onChange={(event) => setTarget(event.target.value)} /><Field required aria-label="Due date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /><button className="rounded-lg bg-mint px-4 py-3 font-bold text-ink sm:col-span-3">Create goal</button></form><div className="mt-6 grid gap-4 sm:grid-cols-2">{goals.map((goal) => <Panel key={goal.name} title={goal.name}><p className="font-display text-4xl">{goal.progressPercent}%</p><p className="mt-2 text-sm text-muted">{money.format(goal.currentAmount)} of {money.format(goal.targetAmount)} · due {goal.dueDate}</p><div className="mt-4 h-3 rounded-full bg-white/10"><div className="h-full rounded-full bg-coral" style={{ width: `${Math.min(goal.progressPercent, 100)}%` }} /></div></Panel>)}</div></div></Shell>; }
-function Placeholder({ title, message }: { title: string; message: string }) { return <Shell><div className="mx-auto max-w-4xl px-5 py-12 lg:px-10"><p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Workspace</p><h1 className="mt-3 font-display text-5xl">{title}<span className="text-coral">.</span></h1><div className="mt-8"><Panel title={title}><p className="text-muted">{message}</p></Panel></div></div></Shell>; }
-export default function App() { return <Routes><Route path="/" element={<Landing />} /><Route path="/login" element={<Auth mode="login" />} /><Route path="/signup" element={<Auth mode="signup" />} /><Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} /><Route path="/dashboard/*" element={<RequireAuth><Routes><Route path="transactions" element={<Shell><TransactionManager /></Shell>} /><Route path="goals" element={<Shell><GoalManager /></Shell>} /><Route path="import" element={<Shell><ImportWorkspace /></Shell>} /><Route path="receipts" element={<Shell><ReceiptWorkspace /></Shell>} /><Route path="assistant" element={<Shell><AssistantWorkspace /></Shell>} /><Route path="scenarios" element={<Shell><ScenarioWorkspace /></Shell>} /><Route path="reports" element={<Shell><ReportWorkspace /></Shell>} /><Route path="categorize" element={<Shell><CategorizationWorkspace /></Shell>} /><Route path="investigate" element={<Shell><InvestigationWorkspace /></Shell>} /><Route path="*" element={<Dashboard />} /></Routes></RequireAuth>} /></Routes>; }
+function TransactionsWorkspace() {
+  const [items, setItems] = useState<
+    Array<{
+      id: string;
+      merchant?: string;
+      description: string;
+      category: string;
+      amount: number;
+      date: string;
+    }>
+  >([]);
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    amount: "",
+    merchant: "",
+    description: "",
+    category: "",
+    paymentMethod: "Card",
+    date: new Date().toISOString().slice(0, 10),
+  });
+  async function load() {
+    try {
+      const response = await fetch(
+        `${API}/api/transactions?type=expense&search=${encodeURIComponent(search)}&limit=50&page=1`,
+        { headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN)}` } },
+      );
+      const data = (await response.json()) as {
+        items?: typeof items;
+        message?: string;
+      };
+      if (!response.ok)
+        throw new Error(data.message ?? "Transactions unavailable.");
+      setItems(data.items ?? []);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Transactions unavailable.",
+      );
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    const response = await fetch(`${API}/api/transactions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem(TOKEN)}`,
+      },
+      body: JSON.stringify({
+        ...form,
+        type: "expense",
+        amount: Number(form.amount),
+        date: `${form.date}T00:00:00.000Z`,
+      }),
+    });
+    if (!response.ok) {
+      const data = (await response.json()) as { message?: string };
+      setError(data.message ?? "Could not save transaction.");
+      return;
+    }
+    setForm({
+      amount: "",
+      merchant: "",
+      description: "",
+      category: "",
+      paymentMethod: "Card",
+      date: new Date().toISOString().slice(0, 10),
+    });
+    await load();
+  }
+  return (
+    <Shell>
+      <div className="mx-auto max-w-[1200px] px-5 py-10 lg:px-10">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
+          Workspace / Transactions
+        </p>
+        <h1 className="mt-3 font-display text-5xl">
+          Your money trail<span className="text-coral">.</span>
+        </h1>
+        <form
+          onSubmit={add}
+          className="mt-8 grid gap-3 rounded-xl border border-white/10 bg-panel p-5 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          <Field
+            required
+            aria-label="Amount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="Amount"
+            value={form.amount}
+            onChange={(event) =>
+              setForm({ ...form, amount: event.target.value })
+            }
+          />
+          <Field
+            required
+            aria-label="Merchant"
+            placeholder="Merchant"
+            value={form.merchant}
+            onChange={(event) =>
+              setForm({ ...form, merchant: event.target.value })
+            }
+          />
+          <Field
+            required
+            aria-label="Description"
+            placeholder="Description"
+            value={form.description}
+            onChange={(event) =>
+              setForm({ ...form, description: event.target.value })
+            }
+          />
+          <Field
+            required
+            aria-label="Category"
+            placeholder="Category"
+            value={form.category}
+            onChange={(event) =>
+              setForm({ ...form, category: event.target.value })
+            }
+          />
+          <Field
+            required
+            aria-label="Date"
+            type="date"
+            value={form.date}
+            onChange={(event) => setForm({ ...form, date: event.target.value })}
+          />
+          <button className="rounded-lg bg-mint px-4 py-3 font-bold text-ink">
+            Add expense
+          </button>
+        </form>
+        <div className="mt-6 flex gap-3">
+          <Field
+            aria-label="Search"
+            placeholder="Search transactions"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <button
+            onClick={() => void load()}
+            className="rounded-lg border border-white/15 px-4 text-mint"
+          >
+            Search
+          </button>
+        </div>
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-coral">
+            {error}
+          </p>
+        )}
+        <div className="mt-6 overflow-x-auto rounded-xl border border-white/10 bg-panel">
+          <table className="w-full min-w-[600px] text-left text-sm">
+            <thead className="border-b border-white/10 text-muted">
+              <tr>
+                <th className="p-4">Date</th>
+                <th className="p-4">Merchant</th>
+                <th className="p-4">Category</th>
+                <th className="p-4 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-b border-white/5">
+                  <td className="p-4 text-muted">
+                    {new Date(item.date).toLocaleDateString()}
+                  </td>
+                  <td className="p-4">{item.merchant || item.description}</td>
+                  <td className="p-4 text-muted">{item.category}</td>
+                  <td className="p-4 text-right text-coral">
+                    -{money.format(item.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {items.length === 0 && (
+            <p className="p-8 text-center text-sm text-muted">
+              No transactions found.
+            </p>
+          )}
+        </div>
+      </div>
+    </Shell>
+  );
+}
+function GoalsWorkspace() {
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [name, setName] = useState("");
+  const [target, setTarget] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  async function load() {
+    const response = await fetch(`${API}/api/goals`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN)}` },
+    });
+    const data = (await response.json()) as { goals?: Goal[] };
+    setGoals(data.goals ?? []);
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    await fetch(`${API}/api/goals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem(TOKEN)}`,
+      },
+      body: JSON.stringify({
+        name,
+        type: "savings",
+        targetAmount: Number(target),
+        currentAmount: 0,
+        category: "Savings",
+        dueDate,
+      }),
+    });
+    setName("");
+    setTarget("");
+    setDueDate("");
+    await load();
+  }
+  return (
+    <Shell>
+      <div className="mx-auto max-w-[1000px] px-5 py-10 lg:px-10">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
+          Workspace / Goals
+        </p>
+        <h1 className="mt-3 font-display text-5xl">
+          Give your money a destination<span className="text-coral">.</span>
+        </h1>
+        <form
+          onSubmit={add}
+          className="mt-8 grid gap-3 rounded-xl border border-white/10 bg-panel p-5 sm:grid-cols-3"
+        >
+          <Field
+            required
+            aria-label="Goal name"
+            placeholder="Goal name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Field
+            required
+            aria-label="Target amount"
+            type="number"
+            min="0.01"
+            placeholder="Target amount"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+          />
+          <Field
+            required
+            aria-label="Due date"
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+          <button className="rounded-lg bg-mint px-4 py-3 font-bold text-ink sm:col-span-3">
+            Create goal
+          </button>
+        </form>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          {goals.map((goal) => (
+            <Panel key={goal.name} title={goal.name}>
+              <p className="font-display text-4xl">{goal.progressPercent}%</p>
+              <p className="mt-2 text-sm text-muted">
+                {money.format(goal.currentAmount)} of{" "}
+                {money.format(goal.targetAmount)} · due {goal.dueDate}
+              </p>
+              <div className="mt-4 h-3 rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-coral"
+                  style={{ width: `${Math.min(goal.progressPercent, 100)}%` }}
+                />
+              </div>
+            </Panel>
+          ))}
+        </div>
+      </div>
+    </Shell>
+  );
+}
+function Placeholder({ title, message }: { title: string; message: string }) {
+  return (
+    <Shell>
+      <div className="mx-auto max-w-4xl px-5 py-12 lg:px-10">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
+          Workspace
+        </p>
+        <h1 className="mt-3 font-display text-5xl">
+          {title}
+          <span className="text-coral">.</span>
+        </h1>
+        <div className="mt-8">
+          <Panel title={title}>
+            <p className="text-muted">{message}</p>
+          </Panel>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/login" element={<Auth mode="login" />} />
+      <Route path="/signup" element={<Auth mode="signup" />} />
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <Dashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/dashboard/*"
+        element={
+          <RequireAuth>
+            <Routes>
+              <Route
+                path="transactions"
+                element={
+                  <Shell>
+                    <TransactionManager />
+                  </Shell>
+                }
+              />
+              <Route
+                path="goals"
+                element={
+                  <Shell>
+                    <GoalManager />
+                  </Shell>
+                }
+              />
+              <Route
+                path="import"
+                element={
+                  <Shell>
+                    <ImportWorkspace />
+                  </Shell>
+                }
+              />
+              <Route
+                path="receipts"
+                element={
+                  <Shell>
+                    <ReceiptWorkspace />
+                  </Shell>
+                }
+              />
+              <Route
+                path="assistant"
+                element={
+                  <Shell>
+                    <AssistantWorkspace />
+                  </Shell>
+                }
+              />
+              <Route
+                path="scenarios"
+                element={
+                  <Shell>
+                    <ScenarioWorkspace />
+                  </Shell>
+                }
+              />
+              <Route
+                path="reports"
+                element={
+                  <Shell>
+                    <ReportWorkspace />
+                  </Shell>
+                }
+              />
+              <Route
+                path="categorize"
+                element={
+                  <Shell>
+                    <CategorizationWorkspace />
+                  </Shell>
+                }
+              />
+              <Route
+                path="investigate"
+                element={
+                  <Shell>
+                    <InvestigationWorkspace />
+                  </Shell>
+                }
+              />
+              <Route path="*" element={<Dashboard />} />
+            </Routes>
+          </RequireAuth>
+        }
+      />
+    </Routes>
+  );
+}

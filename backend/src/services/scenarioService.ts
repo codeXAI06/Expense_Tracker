@@ -1,4 +1,5 @@
 import Transaction from '../models/Transaction.js';
+import { formatRupees } from '../utils/currency.js';
 
 export async function simulateScenarioForUser(userId: string, month: string, category: string, reductionPercent: number, newPriority: string) {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -15,9 +16,9 @@ export async function simulateScenarioForUser(userId: string, month: string, cat
   return {
     estimatedSavings: Number(estimatedSavings.toFixed(2)),
     newCashFlow: Number(newCashFlow.toFixed(2)),
-    recommendation: `Reducing ${category} by ${reductionPercent}% could free up ${estimatedSavings.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} to support ${newPriority}.`,
+    recommendation: `Reducing ${category} by ${reductionPercent}% could free up ${formatRupees(estimatedSavings)} to support ${newPriority}.`,
     assumptions: [
-      `Current ${category} spend is ${currentSpend.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`,
+      `Current ${category} spend is ${formatRupees(currentSpend)}.`,
       `Projected new cash flow assumes the reduced spend is redirected into ${newPriority}.`
     ]
   };

@@ -1,8 +1,9 @@
 import Transaction from '../models/Transaction.js';
 import Goal from '../models/Goal.js';
+import { formatRupees } from '../utils/currency.js';
 
 function formatMoney(amount: number) {
-  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  return formatRupees(amount);
 }
 
 function isFoodTransaction(category: string, merchant?: string) {
