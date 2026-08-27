@@ -112,6 +112,29 @@ describe('Receipt intelligence API', () => {
     expect(transactions.body.items[0].paymentMethod).toBe('Receipt');
   });
 
+  it('flags duplicate receipts and allows an explicit override', async () => {
+    const receiptText = Buffer.from('Duplicate Mart\nTOTAL ₹450\nDATE 28/08/2026');
+    const analyzed = await request(app)
+      .post('/api/receipts/analyze')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', receiptText, { filename: 'duplicate.png', contentType: 'image/png' })
+      .expect(200);
+
+    const payload = {
+      ...analyzed.body.extracted,
+      receiptHash: analyzed.body.receiptHash,
+      fileReference: analyzed.body.fileReference,
+      rawOcrText: analyzed.body.rawOcrText,
+      extractionConfidence: analyzed.body.extracted.confidence
+    };
+
+    await request(app).post('/api/receipts/confirm').set('Authorization', `Bearer ${token}`).send(payload).expect(201);
+    const duplicate = await request(app).post('/api/receipts/confirm').set('Authorization', `Bearer ${token}`).send(payload).expect(409);
+    expect(duplicate.body.message).toMatch(/already exist|duplicate/i);
+
+    await request(app).post('/api/receipts/confirm').set('Authorization', `Bearer ${token}`).send({ ...payload, saveDuplicate: true }).expect(201);
+  });
+
   it('rejects unsupported file types', async () => {
     const response = await request(app)
       .post('/api/receipts/analyze')

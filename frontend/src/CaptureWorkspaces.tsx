@@ -99,11 +99,11 @@ export function AssistantWorkspace() {
         <h2 className="font-display text-2xl">How the assistant works</h2>
         <p className="mt-3 text-sm leading-6 text-muted">
           Your question is matched to a supported financial query. The server
-          retrieves only your own relevant transactions or goals, calculates
-          the answer deterministically, and returns the evidence with any
-          recommendations. It does not invent transactions or use an external
-          AI provider in the current configuration; unsupported questions
-          return an insufficient-data response.
+          retrieves only your own relevant transactions or goals, calculates the
+          answer deterministically, and returns the evidence with any
+          recommendations. It does not invent transactions or use an external AI
+          provider in the current configuration; unsupported questions return an
+          insufficient-data response.
         </p>
       </section>
       {error && (
@@ -245,7 +245,9 @@ export function ImportWorkspace() {
                   {row.description} / {row.category}
                 </span>
                 <span className={row.valid ? "text-mint" : "text-coral"}>
-                  {row.valid ? formatRupees.format(row.amount) : (row.reason ?? "Invalid")}
+                  {row.valid
+                    ? formatRupees.format(row.amount)
+                    : (row.reason ?? "Invalid")}
                 </span>
               </div>
             ))}
@@ -258,6 +260,13 @@ export function ImportWorkspace() {
 
 export function ReceiptWorkspace() {
   const [file, setFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [analysisMeta, setAnalysisMeta] = useState<{
+    receiptHash?: string;
+    fileReference?: string;
+    rawOcrText?: string;
+    validationFlags?: string[];
+  }>({});
   const [extracted, setExtracted] = useState<{
     merchant: string;
     amount: number;
@@ -266,28 +275,57 @@ export function ReceiptWorkspace() {
     subcategory: string;
     confidence: number;
     source: string;
+    currency?: string;
+    subtotal?: number | null;
+    tax?: number | null;
+    discount?: number | null;
+    paymentMethod?: string | null;
+    items?: Array<{
+      name: string;
+      quantity: number;
+      unitPrice: number | null;
+      totalPrice: number | null;
+      category: string;
+      confidence: number;
+    }>;
+    fieldConfidence?: Record<string, number>;
   } | null>(null);
   const [message, setMessage] = useState("");
+  const [status, setStatus] = useState("Ready to scan");
+  const [duplicatePending, setDuplicatePending] = useState(false);
   async function analyze() {
     if (!file) return;
     try {
       setMessage("");
+      setStatus("Uploading receipt...");
       const form = new FormData();
       form.append("file", file);
-      const result = await requestJson<{ extracted: typeof extracted }>(
-        "/api/receipts/analyze",
-        { method: "POST", body: form },
-      );
+      setStatus("Improving image and reading receipt...");
+      const result = await requestJson<{
+        extracted: typeof extracted;
+        receiptHash: string;
+        fileReference: string;
+        rawOcrText: string;
+        validation: { flags: string[] };
+      }>("/api/receipts/analyze", { method: "POST", body: form });
       setExtracted(result.extracted);
+      setAnalysisMeta({
+        receiptHash: result.receiptHash,
+        fileReference: result.fileReference,
+        rawOcrText: result.rawOcrText,
+        validationFlags: result.validation.flags,
+      });
+      setStatus("Ready for review");
     } catch (analyzeError) {
       setMessage(
         analyzeError instanceof Error
           ? analyzeError.message
           : "Receipt analysis unavailable.",
       );
+      setStatus("Needs manual review");
     }
   }
-  async function confirm() {
+  async function confirm(saveDuplicate = false) {
     if (!extracted) return;
     try {
       const result = await requestJson<{ confirmation: { id: string } }>(
@@ -295,11 +333,23 @@ export function ReceiptWorkspace() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(extracted),
+          body: JSON.stringify({
+            ...extracted,
+            ...analysisMeta,
+            extractionConfidence: extracted.confidence,
+            saveDuplicate,
+          }),
         },
       );
       setMessage(`Receipt confirmed: ${result.confirmation.id}`);
+      setDuplicatePending(false);
+      setStatus("Saved to expenses");
     } catch (confirmError) {
+      if (
+        confirmError instanceof Error &&
+        confirmError.message.includes("may already exist")
+      )
+        setDuplicatePending(true);
       setMessage(
         confirmError instanceof Error
           ? confirmError.message
@@ -314,13 +364,22 @@ export function ReceiptWorkspace() {
     >
       <div className="mt-8 rounded-xl border border-white/10 bg-panel p-6">
         <Input
-          aria-label="Receipt image"
+          aria-label="Receipt image or PDF"
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.pdf"
           onChange={(event) => {
-            setFile(event.target.files?.[0] ?? null);
+            const selected = event.target.files?.[0] ?? null;
+            setFile(selected);
+            setFileUrl(
+              selected && selected.type.startsWith("image/")
+                ? URL.createObjectURL(selected)
+                : null,
+            );
             setExtracted(null);
+            setAnalysisMeta({});
             setMessage("");
+            setDuplicatePending(false);
+            setStatus(selected ? "Ready to scan" : "Ready to scan");
           }}
         />
         <button
@@ -335,53 +394,188 @@ export function ReceiptWorkspace() {
             {message}
           </p>
         )}
+        <p role="status" className="mt-3 text-sm text-muted">
+          {status}
+        </p>
       </div>
       {extracted && (
         <section className="mt-6 rounded-xl border border-white/10 bg-panel p-6">
-          <p className="text-sm text-muted">
-            Review before confirming / {Math.round(extracted.confidence * 100)}%
-            confidence
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Input
-              aria-label="Extracted merchant"
-              value={extracted.merchant}
-              onChange={(event) =>
-                setExtracted({ ...extracted, merchant: event.target.value })
-              }
-            />
-            <Input
-              aria-label="Extracted amount"
-              type="number"
-              value={extracted.amount}
-              onChange={(event) =>
-                setExtracted({
-                  ...extracted,
-                  amount: Number(event.target.value),
-                })
-              }
-            />
-            <Input
-              aria-label="Extracted date"
-              type="date"
-              value={extracted.date}
-              onChange={(event) =>
-                setExtracted({ ...extracted, date: event.target.value })
-              }
-            />
-            <Input
-              aria-label="Extracted category"
-              value={extracted.category}
-              onChange={(event) =>
-                setExtracted({ ...extracted, category: event.target.value })
-              }
-            />
+          <div className="grid gap-6 lg:grid-cols-2">
+            {fileUrl ? (
+              <img
+                src={fileUrl}
+                alt="Uploaded receipt"
+                className="max-h-96 w-full rounded-lg object-contain"
+              />
+            ) : (
+              <div className="flex min-h-48 items-center justify-center rounded-lg border border-white/10 text-muted">
+                PDF uploaded
+              </div>
+            )}
+            <div>
+              <p className="text-sm text-muted">
+                Review before confirming /{" "}
+                {Math.round(extracted.confidence * 100)}% confidence
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Input
+                  aria-label="Extracted merchant"
+                  value={extracted.merchant}
+                  onChange={(event) =>
+                    setExtracted({ ...extracted, merchant: event.target.value })
+                  }
+                />
+                <Input
+                  aria-label="Extracted amount"
+                  type="number"
+                  value={extracted.amount}
+                  onChange={(event) =>
+                    setExtracted({
+                      ...extracted,
+                      amount: Number(event.target.value),
+                    })
+                  }
+                />
+                <Input
+                  aria-label="Extracted date"
+                  type="date"
+                  value={extracted.date}
+                  onChange={(event) =>
+                    setExtracted({ ...extracted, date: event.target.value })
+                  }
+                />
+                <Input
+                  aria-label="Extracted category"
+                  value={extracted.category}
+                  onChange={(event) =>
+                    setExtracted({ ...extracted, category: event.target.value })
+                  }
+                />
+                <Input
+                  aria-label="Extracted tax"
+                  type="number"
+                  placeholder="Tax"
+                  value={extracted.tax ?? ""}
+                  onChange={(event) =>
+                    setExtracted({
+                      ...extracted,
+                      tax: event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    })
+                  }
+                />
+                <Input
+                  aria-label="Extracted subtotal"
+                  type="number"
+                  placeholder="Subtotal"
+                  value={extracted.subtotal ?? ""}
+                  onChange={(event) =>
+                    setExtracted({
+                      ...extracted,
+                      subtotal: event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    })
+                  }
+                />
+                <Input
+                  aria-label="Extracted discount"
+                  type="number"
+                  placeholder="Discount"
+                  value={extracted.discount ?? ""}
+                  onChange={(event) =>
+                    setExtracted({
+                      ...extracted,
+                      discount: event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    })
+                  }
+                />
+                <Input
+                  aria-label="Extracted currency"
+                  maxLength={3}
+                  placeholder="Currency"
+                  value={extracted.currency ?? "INR"}
+                  onChange={(event) =>
+                    setExtracted({
+                      ...extracted,
+                      currency: event.target.value.toUpperCase(),
+                    })
+                  }
+                />
+                <Input
+                  aria-label="Extracted payment method"
+                  placeholder="Payment method"
+                  value={extracted.paymentMethod ?? ""}
+                  onChange={(event) =>
+                    setExtracted({
+                      ...extracted,
+                      paymentMethod: event.target.value,
+                    })
+                  }
+                />
+              </div>
+              {extracted.items && extracted.items.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-sm text-muted">Line items</p>
+                  {extracted.items.map((item, index) => (
+                    <div
+                      key={`${item.name}-${index}`}
+                      className="mt-2 grid gap-2 sm:grid-cols-2"
+                    >
+                      <Input
+                        aria-label={`Item ${index + 1} name`}
+                        value={item.name}
+                        onChange={(event) => {
+                          const items = [...extracted.items!];
+                          items[index] = { ...item, name: event.target.value };
+                          setExtracted({ ...extracted, items });
+                        }}
+                      />
+                      <Input
+                        aria-label={`Item ${index + 1} total`}
+                        type="number"
+                        value={item.totalPrice ?? ""}
+                        onChange={(event) => {
+                          const items = [...extracted.items!];
+                          const totalPrice = event.target.value
+                            ? Number(event.target.value)
+                            : null;
+                          items[index] = {
+                            ...item,
+                            totalPrice,
+                            unitPrice: totalPrice,
+                          };
+                          setExtracted({ ...extracted, items });
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {extracted.fieldConfidence &&
+                Object.entries(extracted.fieldConfidence).some(
+                  ([, confidence]) => confidence < 0.6,
+                ) && (
+                  <p className="mt-4 text-sm text-gold">
+                    Please verify the highlighted low-confidence fields before
+                    saving.
+                  </p>
+                )}
+            </div>
           </div>
+          {duplicatePending && (
+            <div className="mt-5 rounded-lg border border-gold/50 p-4 text-sm text-gold">
+              This receipt may already exist in your expenses. Save it anyway?
+            </div>
+          )}
           <button
-            onClick={() => void confirm()}
+            onClick={() => void confirm(duplicatePending)}
             className="mt-5 rounded-lg border border-mint px-4 py-3 text-mint"
           >
-            Confirm receipt
+            {duplicatePending ? "Save anyway" : "Confirm & save expense"}
           </button>
         </section>
       )}

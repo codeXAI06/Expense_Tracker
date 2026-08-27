@@ -98,8 +98,8 @@ mongodb-data/
 # Uploaded Files
 # Uncomment if your app stores uploads locally
 # ========================================
-# uploads/
-# public/uploads/
+backend/uploads/
+uploads/
 
 # ========================================
 # Secrets

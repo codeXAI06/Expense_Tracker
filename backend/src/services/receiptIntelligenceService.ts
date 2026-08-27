@@ -1,165 +1,152 @@
-import { AppError } from '../utils/appError.js';
-import ReceiptConfirmation from '../models/ReceiptConfirmation.js';
-import Transaction from '../models/Transaction.js';
-import Tesseract from 'tesseract.js';
+import { extractReceiptWithOptionalLlm } from "./receiptExtractionService.js";
+import { AppError } from "../utils/appError.js";
+import ReceiptConfirmation from "../models/ReceiptConfirmation.js";
+import Transaction from "../models/Transaction.js";
+import { findReceiptDuplicate } from "./receiptDuplicateService.js";
+import {
+  hashReceipt,
+  runReceiptOcr,
+  storeOriginalReceipt,
+} from "./receiptOcrService.js";
+import { validateReceipt } from "./receiptValidationService.js";
 
-export interface ReceiptExtraction {
-  merchant: string;
-  amount: number;
-  date: string;
-  category: string;
-  subcategory: string;
-  confidence: number;
-  source: 'ocr' | 'rule' | 'manual';
-}
+export async function analyzeReceiptForUser(
+  userId: string,
+  fileBuffer: Buffer,
+  originalFileName: string,
+) {
+  const receiptHash = hashReceipt(fileBuffer);
+  const ocr = await runReceiptOcr(fileBuffer, originalFileName);
+  const fileReference = await storeOriginalReceipt(
+    fileBuffer,
+    originalFileName,
+    receiptHash,
+  );
+  const extracted = await extractReceiptWithOptionalLlm(ocr);
+  const validation = validateReceipt(extracted);
+  const duplicate = await findReceiptDuplicate(
+    userId,
+    receiptHash,
+    extracted.merchant ?? undefined,
+    extracted.date ?? undefined,
+    extracted.total ?? undefined,
+  );
 
-function isBinaryImage(buffer: Buffer) {
-  return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
-    buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) ||
-    buffer.subarray(0, 4).toString('ascii') === 'RIFF' ||
-    buffer.subarray(4, 8).toString('ascii') === 'WEBP' ||
-    buffer.subarray(0, 6).toString('ascii') === 'GIF87a' ||
-    buffer.subarray(0, 6).toString('ascii') === 'GIF89a';
-}
-
-function extractFromText(content: string): ReceiptExtraction {
-  const normalized = content.replace(/\s+/g, ' ').trim();
-  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-
-  const merchantLine = lines.find((line) => /starbucks|coffee|grocery|amazon|mcdonald|restaurant|uber|zomato|walmart|subway|dunkin|swiggy|domino|mart|supermarket|bigbasket|zepto|blinkit|dmart/i.test(line)) ?? lines.find((line) => !/total|amount|date|tax|subtotal|invoice|receipt|cash|card|upi/i.test(line)) ?? lines[0] ?? 'Unknown Merchant';
-  const merchant = merchantLine.replace(/[₹$]|\b(?:RS|INR|TOTAL|DATE|AMOUNT)\b/gi, '').replace(/\d[\d,]*(?:\.\d+)?/g, '').trim() || 'Unknown Merchant';
-
-  const labeledAmount = normalized.match(/\b(?:grand\s+total|total\s+(?:including|incl\.?|with)\s+(?:gst|tax)|amount\s+due|net\s+amount|payable|balance\s+due|total(?!\s*(?:before|excluding|excl\.?)))\b\s*[:\-]?\s*(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
-  const currencyAmount = normalized.match(/(?:₹|rs\.?|inr|\$)\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
-  const subtotal = normalized.match(/\bsub\s*total\b\s*[:\-]?\s*(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
-  const taxAmounts = [...normalized.matchAll(/\b(?:gst|cgst|sgst|igst|tax)\b[^\d]{0,12}(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/gi)].map((match) => Number(match[1].replace(/,/g, '')));
-  const amount = labeledAmount
-    ? Number(labeledAmount.replace(/,/g, ''))
-    : subtotal
-      ? Number(subtotal.replace(/,/g, '')) + taxAmounts.reduce((sum, tax) => sum + tax, 0)
-      : Number((currencyAmount ?? '0').replace(/,/g, '')) || 0;
-
-  const dateMatch = normalized.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4})/);
-  const date = dateMatch ? normalizeReceiptDate(dateMatch[1]) : new Date().toISOString().slice(0, 10);
-
-  let category = 'Food & Dining';
-  let subcategory = 'Coffee Shops';
-
-  const receiptText = `${merchant} ${normalized}`;
-  if (/starbucks|coffee|cafe|tea|espresso/i.test(receiptText)) {
-    category = 'Food & Dining';
-    subcategory = 'Coffee Shops';
-  } else if (/amazon|walmart|grocery|market|supermarket|bigbasket|zepto|blinkit|dmart|mart|rice|vegetable|milk|bread/i.test(receiptText)) {
-    category = 'Groceries';
-    subcategory = 'Household Essentials';
-  } else if (/uber|zomato|swiggy|restaurant|pizza|burger|domino/i.test(receiptText)) {
-    category = 'Food & Dining';
-    subcategory = 'Food Delivery';
-  } else if (/netflix|spotify|streaming/i.test(receiptText)) {
-    category = 'Entertainment';
-    subcategory = 'Streaming Services';
-  } else {
-    category = 'Miscellaneous';
-    subcategory = 'Uncategorized';
+  if (!extracted.merchant || extracted.total === null) {
+    throw new AppError(
+      "We could not read this receipt clearly. Please verify the merchant and total manually.",
+      422,
+      { validation, rawOcrText: extracted.rawOcrText },
+    );
   }
 
   return {
-    merchant: merchant || 'Unknown Merchant',
-    amount: Number(amount.toFixed(2)),
-    date,
-    category,
-    subcategory,
-    confidence: 0.82,
-    source: 'ocr'
+    extracted: {
+      merchant: extracted.merchant,
+      amount: extracted.total,
+      date: extracted.date ?? new Date().toISOString().slice(0, 10),
+      category: extracted.category ?? "Miscellaneous",
+      subcategory: "Receipt",
+      confidence: extracted.confidence,
+      source: "ocr" as const,
+      currency: extracted.currency ?? "INR",
+      subtotal: extracted.subtotal,
+      tax: extracted.tax,
+      discount: extracted.discount,
+      paymentMethod: extracted.paymentMethod,
+      items: extracted.items,
+      fieldConfidence: extracted.fieldConfidence,
+    },
+    receiptHash,
+    fileReference,
+    rawOcrText: extracted.rawOcrText,
+    validation,
+    duplicate,
   };
 }
 
-function normalizeReceiptDate(value: string) {
-  const separator = value.includes('/') ? '/' : value.includes('.') ? '.' : '-';
-  const parts = value.split(separator).map(Number);
-  const [first, second, third] = parts;
-  const isoParts = first > 999 ? [first, second, third] : [third, second, first];
-  const [year, month, day] = isoParts;
-  if (!year || !month || !day || month > 12 || day > 31) {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-}
-
-export async function analyzeReceiptForUser(_userId: string, fileBuffer: Buffer, originalFileName: string) {
-  const mime = /^image\/(png|jpeg|jpg|webp|gif)$/i.test(originalFileName) || /\.(png|jpe?g|webp|gif)$/i.test(originalFileName)
-    ? 'image'
-    : '';
-
-  if (!mime) {
-    throw new AppError('Unsupported file type. Please upload a receipt image (PNG, JPG, JPEG, WEBP, or GIF).', 400);
-  }
-
-  let content: string;
-  if (isBinaryImage(fileBuffer)) {
-    try {
-      const ocrResult = await Tesseract.recognize(fileBuffer, 'eng');
-      content = ocrResult.data.text;
-    } catch {
-      throw new AppError('Receipt details could not be extracted. Please review the receipt manually.', 422);
-    }
-  } else {
-    content = fileBuffer.toString('utf-8');
-  }
-  const extraction = extractFromText(content);
-
-  if (extraction.merchant === 'Unknown Merchant' || extraction.amount <= 0) {
-    throw new AppError('Receipt details could not be extracted. Please review the receipt manually.', 422);
-  }
-
-  return {
-    extracted: extraction,
-    preview: {
-      merchant: extraction.merchant,
-      amount: extraction.amount,
-      date: extraction.date,
-      category: extraction.category,
-      subcategory: extraction.subcategory,
-      confidence: extraction.confidence
-    }
-  };
-}
-
-export async function confirmReceiptForUser(userId: string, payload: {
-  merchant: string;
-  amount: number;
-  date: string;
-  category: string;
-  subcategory?: string;
-  source?: 'ocr' | 'manual' | 'ai';
-}) {
+export async function confirmReceiptForUser(
+  userId: string,
+  payload: {
+    merchant: string;
+    amount: number;
+    date: string;
+    category: string;
+    subcategory?: string;
+    source?: "ocr" | "manual" | "ai";
+    currency?: string;
+    subtotal?: number | null;
+    tax?: number | null;
+    discount?: number | null;
+    paymentMethod?: string | null;
+    items?: unknown[];
+    receiptHash?: string;
+    originalFileName?: string;
+    fileReference?: string;
+    rawOcrText?: string;
+    extractionConfidence?: number;
+    validationFlags?: string[];
+    saveDuplicate?: boolean;
+  },
+) {
   const merchant = payload.merchant.trim();
   const amount = Number(payload.amount);
   const date = new Date(payload.date);
-  const category = payload.category.trim();
-  const subcategory = payload.subcategory?.trim() || undefined;
-  const source = payload.source ?? 'manual';
+  if (
+    !merchant ||
+    !Number.isFinite(amount) ||
+    amount < 0 ||
+    Number.isNaN(date.getTime())
+  ) {
+    throw new AppError("Receipt merchant, total, and date must be valid.", 400);
+  }
 
-  const transaction = await Transaction.create({
-    user: userId,
-    type: 'expense',
-    amount,
-    description: `Receipt: ${merchant}`,
-    category,
-    paymentMethod: 'Receipt',
+  const duplicate = await findReceiptDuplicate(
+    userId,
+    payload.receiptHash,
     merchant,
-    date
-  });
+    payload.date,
+    amount,
+  );
+  if (duplicate.likelyDuplicate && !payload.saveDuplicate) {
+    throw new AppError(
+      "This receipt may already exist in your expenses.",
+      409,
+      { duplicate },
+    );
+  }
 
+  const category = payload.category.trim();
   const confirmation = await ReceiptConfirmation.create({
     user: userId,
     merchant,
     amount,
     date,
     category,
-    subcategory,
-    source
+    subcategory: payload.subcategory?.trim() || undefined,
+    source: payload.source ?? "manual",
+    currency: payload.currency ?? "INR",
+    subtotal: payload.subtotal ?? undefined,
+    tax: payload.tax ?? undefined,
+    discount: payload.discount ?? undefined,
+    paymentMethod: payload.paymentMethod ?? "Receipt",
+    items: payload.items ?? [],
+    receiptHash: payload.receiptHash,
+    originalFileName: payload.originalFileName,
+    fileReference: payload.fileReference,
+    rawOcrText: payload.rawOcrText,
+    extractionConfidence: payload.extractionConfidence,
+    validationFlags: payload.validationFlags ?? [],
+  });
+  const transaction = await Transaction.create({
+    user: userId,
+    type: "expense",
+    amount,
+    description: `Receipt: ${merchant}`,
+    category,
+    paymentMethod: payload.paymentMethod ?? "Receipt",
+    merchant,
+    date,
   });
 
   return {
@@ -169,7 +156,9 @@ export async function confirmReceiptForUser(userId: string, payload: {
     amount: confirmation.amount,
     date: new Date(confirmation.date).toISOString().slice(0, 10),
     category: confirmation.category,
-    subcategory: confirmation.subcategory ?? 'Uncategorized',
-    source: confirmation.source
+    subcategory: confirmation.subcategory ?? "Uncategorized",
+    source: confirmation.source,
+    currency: confirmation.currency,
+    duplicate: duplicate.likelyDuplicate,
   };
 }
