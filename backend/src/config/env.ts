@@ -1,6 +1,11 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import dotenv from 'dotenv';
 
-dotenv.config();
+const envPath = existsSync(resolve(process.cwd(), '.env'))
+  ? resolve(process.cwd(), '.env')
+  : resolve(process.cwd(), 'backend/.env');
+dotenv.config({ path: envPath });
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 const jwtSecret = process.env.JWT_SECRET ?? 'dev-jwt-secret-change-me';
