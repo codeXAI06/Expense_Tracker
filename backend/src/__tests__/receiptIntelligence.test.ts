@@ -66,6 +66,16 @@ describe('Receipt intelligence API', () => {
     expect(response.body.confirmation.merchant).toBe('Starbucks');
     expect(response.body.confirmation.amount).toBe(18.75);
     expect(response.body.confirmation.category).toBe('Food & Dining');
+    expect(response.body.confirmation.transactionId).toBeTruthy();
+
+    const transactions = await request(app)
+      .get('/api/transactions?search=Starbucks')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(transactions.body.items).toHaveLength(1);
+    expect(transactions.body.items[0].type).toBe('expense');
+    expect(transactions.body.items[0].paymentMethod).toBe('Receipt');
   });
 
   it('rejects unsupported file types', async () => {

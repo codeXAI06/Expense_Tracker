@@ -1,5 +1,6 @@
 import { AppError } from '../utils/appError.js';
 import ReceiptConfirmation from '../models/ReceiptConfirmation.js';
+import Transaction from '../models/Transaction.js';
 
 export interface ReceiptExtraction {
   merchant: string;
@@ -92,18 +93,37 @@ export async function confirmReceiptForUser(userId: string, payload: {
   subcategory?: string;
   source?: 'ocr' | 'manual' | 'ai';
 }) {
+  const merchant = payload.merchant.trim();
+  const amount = Number(payload.amount);
+  const date = new Date(payload.date);
+  const category = payload.category.trim();
+  const subcategory = payload.subcategory?.trim() || undefined;
+  const source = payload.source ?? 'manual';
+
+  const transaction = await Transaction.create({
+    user: userId,
+    type: 'expense',
+    amount,
+    description: `Receipt: ${merchant}`,
+    category,
+    paymentMethod: 'Receipt',
+    merchant,
+    date
+  });
+
   const confirmation = await ReceiptConfirmation.create({
     user: userId,
-    merchant: payload.merchant.trim(),
-    amount: Number(payload.amount),
-    date: new Date(payload.date),
-    category: payload.category.trim(),
-    subcategory: payload.subcategory?.trim() || undefined,
-    source: payload.source ?? 'manual'
+    merchant,
+    amount,
+    date,
+    category,
+    subcategory,
+    source
   });
 
   return {
     id: String(confirmation._id),
+    transactionId: String(transaction._id),
     merchant: confirmation.merchant,
     amount: confirmation.amount,
     date: new Date(confirmation.date).toISOString().slice(0, 10),
