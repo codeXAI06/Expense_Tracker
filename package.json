@@ -1,0 +1,21 @@
+{
+  "name": "expense-tracker-platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm --workspace backend run dev",
+    "build": "npm --workspace backend run build && npm --workspace frontend run build",
+    "test": "npm --workspace backend run test && npm --workspace frontend run test",
+    "lint": "npm --workspace backend run build && npm --workspace frontend run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@types/multer": "^2.2.0",
+    "multer": "^2.2.0"
+  }
+}
