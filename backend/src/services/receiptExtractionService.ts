@@ -35,8 +35,9 @@ function numberValue(value?: string) {
 }
 
 export async function extractReceiptWithOptionalLlm(ocr: ReceiptOcrResult) {
+  const deterministic = extractStructuredReceipt(ocr);
   if (process.env.AI_PROVIDER !== "openai" || !process.env.AI_API_KEY)
-    return extractStructuredReceipt(ocr);
+    return deterministic;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -72,18 +73,21 @@ export async function extractReceiptWithOptionalLlm(ocr: ReceiptOcrResult) {
       data.choices?.[0]?.message?.content ?? "{}",
     ) as Record<string, unknown>;
     return structuredSchema.parse({
-      merchant: parsed.merchant ?? null,
-      date: parsed.date ?? null,
-      currency: parsed.currency ?? null,
-      subtotal: parsed.subtotal ?? null,
-      tax: parsed.tax ?? null,
+      merchant: deterministic.merchant ?? parsed.merchant ?? null,
+      date: deterministic.date ?? parsed.date ?? null,
+      currency: deterministic.currency ?? parsed.currency ?? null,
+      subtotal: deterministic.subtotal ?? parsed.subtotal ?? null,
+      tax: deterministic.tax ?? parsed.tax ?? null,
       discount: parsed.discount ?? null,
-      total: parsed.total ?? null,
+      total: deterministic.total ?? parsed.total ?? null,
       paymentMethod: parsed.payment_method ?? null,
-      items: parsed.items ?? [],
-      category: parsed.category ?? null,
+      items: parsed.items ?? deterministic.items,
+      category:
+        deterministic.category !== "Miscellaneous"
+          ? deterministic.category
+          : (parsed.category ?? deterministic.category),
       confidence: parsed.confidence ?? ocr.confidence,
-      fieldConfidence: { merchant: 0.8, date: 0.8, total: 0.8, category: 0.8 },
+      fieldConfidence: deterministic.fieldConfidence,
       rawOcrText: ocr.rawText,
     });
   } catch {
