@@ -8,5 +8,8 @@ describe('Health API', () => {
 
     expect(response.body.success).toBe(true);
     expect(response.body.message).toMatch(/healthy|running/i);
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+    expect(response.headers['referrer-policy']).toBe('no-referrer');
   });
 });

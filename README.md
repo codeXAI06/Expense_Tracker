@@ -4,7 +4,7 @@ A production-style financial operating system built with the MERN stack and a st
 
 ## Overview
 
-This application is designed to help users understand where their money goes, detect unusual spending behavior, forecast future cash flow, and model financial goals before making decisions. The product avoids AI-only decisioning by separating deterministic analytics from LLM explanation.
+This application helps users understand where their money goes, detect unusual spending behavior, forecast future cash flow, and model financial goals before making decisions. Deterministic analytics remain the source of truth; AI categorization can add explanations and falls back safely when unavailable.
 
 ## Version roadmap
 
@@ -45,8 +45,10 @@ This application is designed to help users understand where their money goes, de
 
 ```bash
 npm install
-cp .env.example .env
-npm run dev
+copy .env.example backend\.env
+copy frontend\.env.example frontend\.env
+npm --workspace backend run dev
+npm --workspace frontend run dev
 ```
 
 ## Environment variables
@@ -58,6 +60,14 @@ JWT_SECRET=change-me-in-production
 CLIENT_URL=http://localhost:5173
 NODE_ENV=development
 ```
+
+Frontend configuration in `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:5000
+```
+
+The API runtime uses MongoDB through Mongoose. Keep `MONGODB_URI` configured in `backend/.env`; PostgreSQL and Prisma are not required by this application.
 
 ## Testing
 
@@ -82,4 +92,4 @@ The app is designed for a split deployment model:
 
 ## Project status
 
-Current stage: v0.1.0 foundation
+Current stage: v0.15.0 advanced product pass. The backend feature suite and frontend production build are passing; production deployment still requires a configured MongoDB instance, API URL, and CI/deployment environment.

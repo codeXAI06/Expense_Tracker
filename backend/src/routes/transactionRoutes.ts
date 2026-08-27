@@ -33,21 +33,24 @@ const updateSchema = z.object({
   date: z.string().datetime().optional()
 });
 
+const listQuerySchema = z.object({
+  type: z.enum(['income', 'expense', 'transfer']).optional(),
+  category: z.string().trim().max(100).optional(),
+  paymentMethod: z.string().trim().max(100).optional(),
+  search: z.string().trim().max(200).optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  sort: z.enum(['date:asc', 'date:desc', 'amount:asc', 'amount:desc']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10)
+});
+
 router.use(protect);
 
 router.get('/', async (req: AuthenticatedRequest, res, next) => {
   try {
-    const result = await getTransactionsForUser(req.user!.id, {
-      type: typeof req.query.type === 'string' ? (req.query.type as 'income' | 'expense' | 'transfer') : undefined,
-      category: typeof req.query.category === 'string' ? req.query.category : undefined,
-      paymentMethod: typeof req.query.paymentMethod === 'string' ? req.query.paymentMethod : undefined,
-      search: typeof req.query.search === 'string' ? req.query.search : undefined,
-      startDate: typeof req.query.startDate === 'string' ? req.query.startDate : undefined,
-      endDate: typeof req.query.endDate === 'string' ? req.query.endDate : undefined,
-      sort: typeof req.query.sort === 'string' ? req.query.sort : undefined,
-      page: Number(req.query.page ?? 1),
-      limit: Number(req.query.limit ?? 10)
-    });
+    const query = listQuerySchema.parse(req.query);
+    const result = await getTransactionsForUser(req.user!.id, query);
 
     res.json(result);
   } catch (error) {
