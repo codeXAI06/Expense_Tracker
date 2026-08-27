@@ -49,6 +49,24 @@ describe('Receipt intelligence API', () => {
     expect(response.body.extracted.confidence).toBeGreaterThan(0.5);
   });
 
+  it('extracts labeled rupee amount and Indian date without using the date year', async () => {
+    const receiptText = Buffer.from('FreshMart Grocery\nITEM Rice 120\nTOTAL ₹1,250.50\nDATE 27/08/2026');
+
+    const response = await request(app)
+      .post('/api/receipts/analyze')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', receiptText, {
+        filename: 'freshmart.png',
+        contentType: 'image/png'
+      })
+      .expect(200);
+
+    expect(response.body.extracted.merchant).toMatch(/freshmart/i);
+    expect(response.body.extracted.amount).toBe(1250.5);
+    expect(response.body.extracted.date).toBe('2026-08-27');
+    expect(response.body.extracted.category).toBe('Groceries');
+  });
+
   it('stores a user confirmation for extracted receipt data', async () => {
     const response = await request(app)
       .post('/api/receipts/confirm')

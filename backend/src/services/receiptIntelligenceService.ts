@@ -26,28 +26,31 @@ function extractFromText(content: string): ReceiptExtraction {
   const normalized = content.replace(/\s+/g, ' ').trim();
   const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
-  const merchantLine = lines.find((line) => /starbucks|coffee|grocery|amazon|mcdonald|restaurant|uber|zomato|walmart|subway|dunkin/i.test(line)) ?? lines[0] ?? 'Unknown Merchant';
-  const merchant = merchantLine.replace(/\$|\d|TOTAL|DATE|AMOUNT/gi, '').trim() || 'Unknown Merchant';
+  const merchantLine = lines.find((line) => /starbucks|coffee|grocery|amazon|mcdonald|restaurant|uber|zomato|walmart|subway|dunkin|swiggy|domino/i.test(line)) ?? lines.find((line) => !/total|amount|date|tax|subtotal|invoice|receipt|cash|card|upi/i.test(line)) ?? lines[0] ?? 'Unknown Merchant';
+  const merchant = merchantLine.replace(/[₹$]|\b(?:RS|INR|TOTAL|DATE|AMOUNT)\b/gi, '').replace(/\d[\d,]*(?:\.\d+)?/g, '').trim() || 'Unknown Merchant';
 
-  const amountMatch = normalized.match(/\$?\s?(\d+(?:\.\d{1,2})?)/g)?.slice(-1)[0];
-  const amount = Number((amountMatch ?? '0').replace(/[^\d.]/g, '')) || 0;
+  const labeledAmount = normalized.match(/(?:grand\s+total|total|amount\s+due|net\s+amount|payable|balance\s+due)\s*[:\-]?\s*(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
+  const currencyAmount = normalized.match(/(?:₹|rs\.?|inr|\$)\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
+  const amountValue = labeledAmount ?? currencyAmount ?? '0';
+  const amount = Number(amountValue.replace(/,/g, '')) || 0;
 
-  const dateMatch = normalized.match(/(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})/);
-  const date = dateMatch ? dateMatch[1] : new Date().toISOString().slice(0, 10);
+  const dateMatch = normalized.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4})/);
+  const date = dateMatch ? normalizeReceiptDate(dateMatch[1]) : new Date().toISOString().slice(0, 10);
 
   let category = 'Food & Dining';
   let subcategory = 'Coffee Shops';
 
-  if (/starbucks|coffee|cafe|tea|espresso/i.test(merchant)) {
+  const receiptText = `${merchant} ${normalized}`;
+  if (/starbucks|coffee|cafe|tea|espresso/i.test(receiptText)) {
     category = 'Food & Dining';
     subcategory = 'Coffee Shops';
-  } else if (/amazon|walmart|grocery|market/i.test(merchant)) {
+  } else if (/amazon|walmart|grocery|market|supermarket|bigbasket|zepto/i.test(receiptText)) {
     category = 'Groceries';
     subcategory = 'Household Essentials';
-  } else if (/uber|zomato|restaurant|pizza|burger/i.test(merchant)) {
+  } else if (/uber|zomato|swiggy|restaurant|pizza|burger|domino/i.test(receiptText)) {
     category = 'Food & Dining';
     subcategory = 'Food Delivery';
-  } else if (/netflix|spotify|streaming/i.test(merchant)) {
+  } else if (/netflix|spotify|streaming/i.test(receiptText)) {
     category = 'Entertainment';
     subcategory = 'Streaming Services';
   } else {
@@ -64,6 +67,19 @@ function extractFromText(content: string): ReceiptExtraction {
     confidence: 0.82,
     source: 'ocr'
   };
+}
+
+function normalizeReceiptDate(value: string) {
+  const separator = value.includes('/') ? '/' : value.includes('.') ? '.' : '-';
+  const parts = value.split(separator).map(Number);
+  const [first, second, third] = parts;
+  const isoParts = first > 999 ? [first, second, third] : [third, second, first];
+  const [year, month, day] = isoParts;
+  if (!year || !month || !day || month > 12 || day > 31) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 }
 
 export async function analyzeReceiptForUser(_userId: string, fileBuffer: Buffer, originalFileName: string) {
