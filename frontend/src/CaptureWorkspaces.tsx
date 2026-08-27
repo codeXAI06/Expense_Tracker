@@ -307,6 +307,7 @@ export function ReceiptWorkspace() {
         fileReference: string;
         rawOcrText: string;
         validation: { flags: string[] };
+        duplicate: { likelyDuplicate: boolean; reason?: string };
       }>("/api/receipts/analyze", { method: "POST", body: form });
       setExtracted(result.extracted);
       setAnalysisMeta({
@@ -315,6 +316,8 @@ export function ReceiptWorkspace() {
         rawOcrText: result.rawOcrText,
         validationFlags: result.validation.flags,
       });
+      setDuplicatePending(result.duplicate.likelyDuplicate);
+      if (result.duplicate.likelyDuplicate) setMessage(result.duplicate.reason ?? "This receipt may already exist in your expenses.");
       setStatus("Ready for review");
     } catch (analyzeError) {
       setMessage(
@@ -564,6 +567,7 @@ export function ReceiptWorkspace() {
                     saving.
                   </p>
                 )}
+                {analysisMeta.validationFlags && analysisMeta.validationFlags.length > 0 && <ul className="mt-3 space-y-1 text-sm text-gold">{analysisMeta.validationFlags.map((flag) => <li key={flag}>Please verify: {flag}</li>)}</ul>}
             </div>
           </div>
           {duplicatePending && (
@@ -577,6 +581,7 @@ export function ReceiptWorkspace() {
           >
             {duplicatePending ? "Save anyway" : "Confirm & save expense"}
           </button>
+          <button type="button" onClick={() => { setFile(null); setFileUrl(null); setExtracted(null); setAnalysisMeta({}); setDuplicatePending(false); setMessage(""); setStatus("Ready to scan"); }} className="ml-4 mt-5 text-sm text-muted">Cancel / rescan</button>
         </section>
       )}
     </Workspace>
