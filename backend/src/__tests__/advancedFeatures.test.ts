@@ -161,6 +161,17 @@ describe('Advanced financial features', () => {
     expect(response.body.recommendations.length).toBeGreaterThan(0);
   });
 
+  it('does not invent answers for unsupported questions', async () => {
+    const response = await request(app)
+      .post('/api/assistant/chat')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ message: 'What will the stock market do tomorrow?' })
+      .expect(200);
+
+    expect(response.body.answer).toMatch(/not have enough information/i);
+    expect(response.body.recommendations).toEqual([]);
+  });
+
   it('builds a monthly financial report with totals and insights', async () => {
     const response = await request(app)
       .get('/api/reports/monthly?month=2026-08')
