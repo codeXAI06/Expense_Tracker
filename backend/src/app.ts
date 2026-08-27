@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -15,6 +16,22 @@ import forecastRoutes from './routes/forecastRoutes.js';
 import advancedRoutes from './routes/advancedRoutes.js';
 
 const app = express();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: env.nodeEnv === 'test' ? 1000 : 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many authentication attempts. Please try again later.' }
+});
+
+const resourceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: env.nodeEnv === 'test' ? 1000 : 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many resource-intensive requests. Please try again later.' }
+});
 
 app.disable('x-powered-by');
 app.use((_req, res, next) => {
@@ -46,11 +63,11 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/transactions', transactionRoutes);
-app.use('/api/imports', importRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/receipts', receiptRoutes);
+app.use('/api/imports', resourceLimiter, importRoutes);
+app.use('/api/ai', resourceLimiter, aiRoutes);
+app.use('/api/receipts', resourceLimiter, receiptRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/analytics/anomalies', anomalyRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
