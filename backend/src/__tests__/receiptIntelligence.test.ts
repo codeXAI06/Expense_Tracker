@@ -67,6 +67,22 @@ describe('Receipt intelligence API', () => {
     expect(response.body.extracted.category).toBe('Groceries');
   });
 
+  it('prefers the GST-inclusive total over subtotal and tax lines', async () => {
+    const receiptText = Buffer.from('URBAN MART\nSUBTOTAL ₹1,000\nCGST 9% ₹90\nSGST 9% ₹90\nTOTAL INCL GST ₹1,180\nDATE 27/08/2026');
+
+    const response = await request(app)
+      .post('/api/receipts/analyze')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', receiptText, {
+        filename: 'urban-mart.png',
+        contentType: 'image/png'
+      })
+      .expect(200);
+
+    expect(response.body.extracted.amount).toBe(1180);
+    expect(response.body.extracted.category).toBe('Groceries');
+  });
+
   it('stores a user confirmation for extracted receipt data', async () => {
     const response = await request(app)
       .post('/api/receipts/confirm')

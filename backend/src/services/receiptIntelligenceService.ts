@@ -26,13 +26,18 @@ function extractFromText(content: string): ReceiptExtraction {
   const normalized = content.replace(/\s+/g, ' ').trim();
   const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
-  const merchantLine = lines.find((line) => /starbucks|coffee|grocery|amazon|mcdonald|restaurant|uber|zomato|walmart|subway|dunkin|swiggy|domino/i.test(line)) ?? lines.find((line) => !/total|amount|date|tax|subtotal|invoice|receipt|cash|card|upi/i.test(line)) ?? lines[0] ?? 'Unknown Merchant';
+  const merchantLine = lines.find((line) => /starbucks|coffee|grocery|amazon|mcdonald|restaurant|uber|zomato|walmart|subway|dunkin|swiggy|domino|mart|supermarket|bigbasket|zepto|blinkit|dmart/i.test(line)) ?? lines.find((line) => !/total|amount|date|tax|subtotal|invoice|receipt|cash|card|upi/i.test(line)) ?? lines[0] ?? 'Unknown Merchant';
   const merchant = merchantLine.replace(/[₹$]|\b(?:RS|INR|TOTAL|DATE|AMOUNT)\b/gi, '').replace(/\d[\d,]*(?:\.\d+)?/g, '').trim() || 'Unknown Merchant';
 
-  const labeledAmount = normalized.match(/(?:grand\s+total|total|amount\s+due|net\s+amount|payable|balance\s+due)\s*[:\-]?\s*(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
+  const labeledAmount = normalized.match(/\b(?:grand\s+total|total\s+(?:including|incl\.?|with)\s+(?:gst|tax)|amount\s+due|net\s+amount|payable|balance\s+due|total(?!\s*(?:before|excluding|excl\.?)))\b\s*[:\-]?\s*(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
   const currencyAmount = normalized.match(/(?:₹|rs\.?|inr|\$)\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
-  const amountValue = labeledAmount ?? currencyAmount ?? '0';
-  const amount = Number(amountValue.replace(/,/g, '')) || 0;
+  const subtotal = normalized.match(/\bsub\s*total\b\s*[:\-]?\s*(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
+  const taxAmounts = [...normalized.matchAll(/\b(?:gst|cgst|sgst|igst|tax)\b[^\d]{0,12}(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d{1,2})?)/gi)].map((match) => Number(match[1].replace(/,/g, '')));
+  const amount = labeledAmount
+    ? Number(labeledAmount.replace(/,/g, ''))
+    : subtotal
+      ? Number(subtotal.replace(/,/g, '')) + taxAmounts.reduce((sum, tax) => sum + tax, 0)
+      : Number((currencyAmount ?? '0').replace(/,/g, '')) || 0;
 
   const dateMatch = normalized.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4})/);
   const date = dateMatch ? normalizeReceiptDate(dateMatch[1]) : new Date().toISOString().slice(0, 10);
@@ -44,7 +49,7 @@ function extractFromText(content: string): ReceiptExtraction {
   if (/starbucks|coffee|cafe|tea|espresso/i.test(receiptText)) {
     category = 'Food & Dining';
     subcategory = 'Coffee Shops';
-  } else if (/amazon|walmart|grocery|market|supermarket|bigbasket|zepto/i.test(receiptText)) {
+  } else if (/amazon|walmart|grocery|market|supermarket|bigbasket|zepto|blinkit|dmart|mart|rice|vegetable|milk|bread/i.test(receiptText)) {
     category = 'Groceries';
     subcategory = 'Household Essentials';
   } else if (/uber|zomato|swiggy|restaurant|pizza|burger|domino/i.test(receiptText)) {
