@@ -1,7 +1,7 @@
 import { AppError } from '../utils/appError.js';
 import ReceiptConfirmation from '../models/ReceiptConfirmation.js';
 import Transaction from '../models/Transaction.js';
-import { recognize } from 'tesseract.js';
+import Tesseract from 'tesseract.js';
 
 export interface ReceiptExtraction {
   merchant: string;
@@ -78,7 +78,7 @@ export async function analyzeReceiptForUser(_userId: string, fileBuffer: Buffer,
   let content: string;
   if (isBinaryImage(fileBuffer)) {
     try {
-      const ocrResult = await recognize(fileBuffer, 'eng');
+      const ocrResult = await Tesseract.recognize(fileBuffer, 'eng');
       content = ocrResult.data.text;
     } catch {
       throw new AppError('Receipt details could not be extracted. Please review the receipt manually.', 422);
