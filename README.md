@@ -106,4 +106,4 @@ GitHub Actions runs `npm ci`, the complete test suite, and both production build
 
 ## Project status
 
-Current stage: v0.15.0 advanced product pass. The backend feature suite and frontend production build are passing; production deployment still requires a configured MongoDB instance, API URL, and CI/deployment environment.
+Current stage: production-readiness pass. Backend and frontend tests and production builds are passing, production API dependencies are audit-clean, and Docker/Compose, Render, and GitHub Actions deployment paths are included. A hosted deployment still requires platform credentials, MongoDB Atlas, `JWT_SECRET`, `CLIENT_URL`, and `VITE_API_URL` to be configured in the target environment.
