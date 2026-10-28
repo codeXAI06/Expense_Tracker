@@ -25,7 +25,7 @@ This application helps users understand where their money goes, detect unusual s
 - v0.15.0 — advanced polish
 - v1.0.0 — production release
 
-## Architecture
+
 
 ### Backend
 - Express API with TypeScript
